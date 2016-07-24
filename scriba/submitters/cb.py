@@ -8,22 +8,26 @@ from farnsworth.models import (ChallengeSet,
                                ChallengeSetFielding,
                                Team)
 
-from . import LOG as _parent_log
-LOG = _parent_log.getChild('cb')
+from . import LOG as _PARENT_LOG
+LOG = _PARENT_LOG.getChild('cb')
 
 
 # Minimum percentage of polls expected to pass
 MIN_FUNCTIONALITY = 97.0
-# number of rounds a working binary should be online.
+
+# Number of rounds a working binary should be online.
 MIN_ROUNDS_ONLINE = 4
-# Minimum expected score of a CB, if score falls below this in a round, we blacklist the patch type
+
+# Minimum expected score of a CB, if score falls below this in a round,
+# we blacklist the patch type
 MIN_CB_SCORE = 0.5
+
 # EV threshold, threshold if a local ev is less than this threshold.
 # It will be blacklisted.
 LOCAL_CB_SCORE_THRESHOLD = 0.3
+
 # Expected number of rounds any CS will be available in future.
 MIN_CS_LIFE_ROUNDS = 10
-
 
 
 class CBSubmitter(object):
@@ -53,7 +57,7 @@ class CBSubmitter(object):
 
     @staticmethod
     def same_cbns(a_list, b_list):
-        b_ids = [ b.id for b in b_list ]
+        b_ids = [b.id for b in b_list]
         return len(a_list) == len(b_list) and all(a.id in b_ids for a in a_list)
 
     @staticmethod
@@ -67,40 +71,38 @@ class CBSubmitter(object):
         """
         fielding = ChallengeSetFielding.latest(target_cs, Team.get_our()).get()
         fielded_patch_type = fielding.cbns[0].patch_type
-
         current_cbns = list(fielding.cbns)
 
         all_patches = target_cs.cbns_by_patch_type()
-        filtered_patches = {
+        allowed_patches = {
             k:v for k,v in all_patches.items()
             if not CBSubmitter.blacklisted(v)
         }
 
-        if len(filtered_patches) == 0:
-            # all of the patches are blacklisted, or none exist -- submit the originals
-            return list(target_cs.cbns_original) if not CBSubmitter.same_cbns(
-                target_cs.cbns_original, current_cbns
-            ) else None
+        if not allowed_patches:
+            # All of the patches are blacklisted, or none exist -- submit the originals
+            if not CBSubmitter.same_cbns(target_cs.cbns_original, current_cbns):
+                return list(target_cs.cbns_original)
+            else:
+                return
 
-        if (
-            fielded_patch_type in filtered_patches.keys() and
-            len(filtered_patches[fielded_patch_type][0].fieldings) <= MIN_ROUNDS_ONLINE
-        ):
-            LOG.debug(
-                "Old patch (%s) too fresh on %s, leaving it in.",
-                fielded_patch_type.name, target_cs.name
-            )
+        allowed_patch_type = fielded_patch_type in allowed_patches.keys()
+        enough_data = len(allowed_patches[fielded_patch_type][0].fieldings) > MIN_ROUNDS_ONLINE
+        if allowed_patch_type and not enough_data:
+            LOG.debug("Old patch (%s) too fresh on %s, leaving it in.",
+                      fielded_patch_type.name, target_cs.name)
             return
 
-        to_submit_patch_type, _ = sorted(
-            filtered_patches.items(), key=lambda i: -CBSubmitter.cb_score(i[1][0])
-        )[0]
+        to_submit_patch_type, _ = sorted(allowed_patches.items(),
+                                         key=lambda i: CBSubmitter.cb_score(i[1][0]),
+                                         reverse=True)[0]
 
         if to_submit_patch_type is fielded_patch_type:
             return
 
         new_cbns = all_patches[to_submit_patch_type]
-        return new_cbns if not CBSubmitter.same_cbns(new_cbns, current_cbns) else None
+        if not CBSubmitter.same_cbns(new_cbns, current_cbns):
+            return new_cbns
 
     @staticmethod
     def process_patch_submission(target_cs):
@@ -115,9 +117,9 @@ class CBSubmitter(object):
         else:
             LOG.info("Leaving old CBNs in place for %s", target_cs.name)
 
-    def run(self, current_round=None, random_submit=False): #pylint:disable=no-self-use,unused-argument
+    def run(self, current_round=None, random_submit=False): # pylint:disable=no-self-use,unused-argument
         if (current_round % 2) == 1:
-            # submit only in even round.
+            # Submit only in even round.
             # As ambassador will take care of actually submitting the binary.
-            for curr_cs in ChallengeSet.fielded_in_round():
-                CBSubmitter.process_patch_submission(curr_cs)
+            for cs in ChallengeSet.fielded_in_round():
+                CBSubmitter.process_patch_submission(cs)
