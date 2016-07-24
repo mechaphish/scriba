@@ -87,5 +87,4 @@ class TestCBSubmitter():
         CSF.create(cs=cs, cbns=[cbn_p1], team=t, available_round=r2, poll_feedback=pf2)
 
         # Make sure we revert
-        import ipdb; ipdb.set_trace()
         assert_equals(scriba.submitters.cb.CBSubmitter.patch_decision(cs), [cbn_orig])

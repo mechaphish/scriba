@@ -69,7 +69,7 @@ class CBSubmitter(object):
         """
         Determines the CBNs to submit. Returns None if no submission should be made.
         """
-        fielding = ChallengeSetFielding.latest(target_cs, Team.get_our()).get()
+        fielding = ChallengeSetFielding.latest(target_cs, Team.get_our())
         fielded_patch_type = fielding.cbns[0].patch_type
         current_cbns = list(fielding.cbns)
 
@@ -87,11 +87,12 @@ class CBSubmitter(object):
                 return
 
         allowed_patch_type = fielded_patch_type in allowed_patches.keys()
-        enough_data = len(allowed_patches[fielded_patch_type][0].fieldings) > MIN_ROUNDS_ONLINE
-        if allowed_patch_type and not enough_data:
-            LOG.debug("Old patch (%s) too fresh on %s, leaving it in.",
-                      fielded_patch_type.name, target_cs.name)
-            return
+        if allowed_patch_type:
+            enough_data = len(allowed_patches[fielded_patch_type][0].fieldings) > MIN_ROUNDS_ONLINE
+            if not enough_data:
+                LOG.debug("Old patch (%s) too fresh on %s, leaving it in.",
+                          fielded_patch_type.name, target_cs.name)
+                return
 
         to_submit_patch_type, _ = sorted(allowed_patches.items(),
                                          key=lambda i: CBSubmitter.cb_score(i[1][0]),
@@ -112,8 +113,8 @@ class CBSubmitter(object):
         """
         cbns_to_submit = CBSubmitter.patch_decision(target_cs)
         if cbns_to_submit is not None:
-            for curr_cbn in cbns_to_submit:
-                CSSubmissionCable.get_or_create(cs=target_cs, cbns=curr_cbn, ids=curr_cbn.ids_rule)
+            for cbn in cbns_to_submit:
+                CSSubmissionCable.get_or_create(cs=target_cs, cbns=cbn, ids=cbn.ids_rule)
         else:
             LOG.info("Leaving old CBNs in place for %s", target_cs.name)
 
