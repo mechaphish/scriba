@@ -21,7 +21,7 @@ with open('requirements.txt', 'r') as req_file:
 
 setup(name='scriba',
       version=__version__,
-      packages=['scriba', 'scriba.schedulers'],
+      packages=['scriba', 'scriba.submitters'],
       install_requires=REQUIREMENTS,
       entry_points={
           'console_scripts': [
