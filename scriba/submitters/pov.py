@@ -21,26 +21,23 @@ class POVSubmitter(object):
         for team in Team.opponents():
             throws = 10
             for cs in ChallengeSet.fielded_in_round():
-                cs_fieldings = ChallengeSetFielding.latest(cs, team)
-                ids_fieldings = IDSRuleFielding.latest(cs, team)
+                target_cs_fielding = ChallengeSetFielding.latest(cs, team)
+                target_ids_fielding = IDSRuleFielding.latest(cs, team)
                 to_submit_pov = None
 
-                if cs_fieldings:
-                    target_cs_fielding = cs_fieldings[0]
-                    target_ids_fielding = ids_fieldings[0] if ids_fieldings else None
-
+                if target_cs_fielding is not None:
                     results = PovTestResult.best(target_cs_fielding, target_ids_fielding)
 
-                    if not results:
+                    if results is None:
                         results = PovTestResult.best_against_cs_fielding(target_cs_fielding)
 
-                    if not results:
+                    if results is None:
                         results = PovTestResult.best_against_cs(target_cs_fielding.cs)
 
-                    if results:
+                    if results is not None:
                         # Good, we have a PovTestResult to submit.
                         # FIXME: Should we take the most reliable against this CS and IDS?
-                        to_submit_pov = results[0].exploit
+                        to_submit_pov = results.exploit
                         LOG.info("Submitting a tested PoV %s against team=%s cs=%s",
                                  to_submit_pov.id, team.name, cs.name)
 
