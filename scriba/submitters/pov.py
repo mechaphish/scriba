@@ -29,15 +29,12 @@ class POVSubmitter(object):
                     target_cs_fielding = cs_fieldings[0]
                     target_ids_fielding = ids_fieldings[0] if ids_fieldings else None
 
-                    # See, if there are any results against current cs_fielding and ids_fielding.
                     results = PovTestResult.best(target_cs_fielding, target_ids_fielding)
-                    if not results:
-                        # Ignore IDS and see, if we have a Tested PoV against the cs fielding.
-                        results = PovTestResult.best_for_cs(target_cs_fielding)
 
                     if not results:
-                        # OK, we do not have any PoVs tested against the current cs fielding.
-                        # Get the PoV, most successful against current CS.
+                        results = PovTestResult.best_against_cs_fielding(target_cs_fielding)
+
+                    if not results:
                         results = PovTestResult.best_against_cs(target_cs_fielding.cs)
 
                     if results:
