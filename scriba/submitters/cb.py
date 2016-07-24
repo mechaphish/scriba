@@ -3,28 +3,10 @@
 
 from __future__ import absolute_import, unicode_literals
 
-import random
-
-from farnsworth.models import (ChallengeBinaryNode,
-                               ChallengeSet,
+from farnsworth.models import (ChallengeSet,
                                CSSubmissionCable,
-                               Team,
-                               Round)
-from meister.helpers.feedback_helper import get_poll_feedback
-from meister.helpers.patch_submission_helper import make_blacklist, get_fielded_patch_type
-from meister.helpers.farnsworth_query_helper import FarnsworthQueryHelper
-from meister.helpers.feedback_helper import (get_poll_feedback,
-                                             get_functionality_factor,
-                                             get_time_overhead,
-                                             get_memuse_overhead)
-from meister.helpers.patch_submission_helper import (make_blacklist,
-                                                     get_fielded_patch_type,
-                                                     compute_functionality_score,
-                                                     get_filesize_overhead,
-                                                     get_security_score,
-                                                     compute_perf_score,
-                                                     compute_cb_score,
-                                                     make_patch_submission_decision)
+                               ChallengeSetFielding,
+                               Team)
 
 from . import LOG as _parent_log
 LOG = _parent_log.getChild('cb')
@@ -83,7 +65,7 @@ class CBSubmitter(object):
         """
         Determines the CBNs to submit. Returns None if no submission should be made.
         """
-        fielding = FarnsworthQueryHelper.get_latest_cs_fielding(Team.get_our(), target_cs).get()
+        fielding = ChallengeSetFielding.latest(target_cs, Team.get_our()).get()
         fielded_patch_type = fielding.cbns[0].patch_type
 
         current_cbns = list(fielding.cbns)
@@ -117,7 +99,7 @@ class CBSubmitter(object):
         if to_submit_patch_type is fielded_patch_type:
             return
 
-        new_cbns = list(FarnsworthQueryHelper.get_cbns_for_patch_type(target_cs, to_submit_patch_type))
+        new_cbns = all_patches[to_submit_patch_type]
         return new_cbns if not CBSubmitter.same_cbns(new_cbns, current_cbns) else None
 
     @staticmethod
@@ -133,7 +115,7 @@ class CBSubmitter(object):
         else:
             LOG.info("Leaving old CBNs in place for %s", target_cs.name)
 
-    def run(self, current_round=None, random_submit=False): #pylint:disable=no-self-use
+    def run(self, current_round=None, random_submit=False): #pylint:disable=no-self-use,unused-argument
         if (current_round % 2) == 1:
             # submit only in even round.
             # As ambassador will take care of actually submitting the binary.
