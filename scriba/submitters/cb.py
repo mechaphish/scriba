@@ -162,4 +162,4 @@ class CBSubmitter(object):
         # As ambassador will take care of actually submitting the binary.
         for cs in ChallengeSet.fielded_in_round():
             #CBSubmitter.process_patch_submission(cs)
-            CBSubmitter.rotator_submission(cs)
+            CBSubmitter.process_patch_submission(cs)
