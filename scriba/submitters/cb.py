@@ -153,7 +153,9 @@ class CBSubmitter(object):
             break
 
     def run(self, current_round=None, random_submit=False): # pylint:disable=no-self-use,unused-argument
-        # Submit only in even round.
+        if current_round == 0:
+            return
+
         # As ambassador will take care of actually submitting the binary.
         for cs in ChallengeSet.fielded_in_round():
             #CBSubmitter.process_patch_submission(cs)
