@@ -52,7 +52,10 @@ class CBSubmitter(object):
             return actual_min < MIN_CB_SCORE
 
         estimation = cbs[0].estimated_feedback
-        if estimation.has_failed_polls:
+        if estimation is None:
+            LOG.debug("... no feedback yet")
+            return True
+        elif estimation.has_failed_polls:
             LOG.debug("... has failed polls in estimation")
             return True
         elif estimation.cb_score < LOCAL_CB_SCORE_THRESHOLD:

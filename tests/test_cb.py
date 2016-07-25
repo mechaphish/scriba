@@ -91,6 +91,54 @@ class TestCBSubmitter():
         # Make sure we revert
         assert_equals(scriba.submitters.cb.CBSubmitter.patch_decision(cs), [cbn_orig])
 
+    def test_missing_evaluation(self):
+        t = Team.create(name=Team.OUR_NAME)
+        r0 = Round.create(num=0)
+        cs = CS.create(name='x')
+
+        # Set up a CBN for it, with some feedback
+        cbn_orig = CBN.create(cs=cs, name="unpatched", blob="XXXX")
+        pf_orig = PF.create(
+            cs=cs, round_id=r0.id,
+            success=1.0, timeout=0, connect=0, function=0,
+            time_overhead=0.0, memory_overhead=0.0
+        )
+
+        # Field the default CBN
+        CSF.create(cs=cs, cbns=[cbn_orig], team=t, available_round=r0, poll_feedback=pf_orig)
+
+        # Make sure we properly handle the case when there are no patches
+        assert_is_none(scriba.submitters.cb.CBSubmitter.patch_decision(cs))
+
+        # And patch it, without feedback
+        pt = PT.create(name="a_patch", functionality_risk=0., exploitability=0.)
+        cbn_p1 = CBN.create(cs=cs, name="patch1", blob="XXXYZ", patch_type=pt)
+
+        # Make sure we properly handle the case when feedback is missing
+        assert_is_none(scriba.submitters.cb.CBSubmitter.patch_decision(cs))
+
+        # now the patch score comes in
+        PS.create(
+            cs=cs,
+            patch_type=pt,
+            num_polls=10,
+            has_failed_polls=False,
+            failed_polls=0,
+            round=r0,
+            perf_score={
+                'score': {
+                    'ref': { 'task_clock': 1.0, 'rss': 1.0, 'flt': 1.0, 'file_size': 1.0 },
+                    'rep': {
+                        'task_clock': 1.1, 'file_size': 1.1,
+                        'rss': 1.1, 'flt': 1.1,
+                    }
+                }
+            }
+        )
+
+        # Make sure we choose this patch
+        assert_equals(scriba.submitters.cb.CBSubmitter.patch_decision(cs), [cbn_p1])
+
     def test_variable_submitter(self):
         t = Team.create(name=Team.OUR_NAME)
         r0 = Round.create(num=0)
