@@ -47,9 +47,12 @@ class POVSubmitter(object):
 
                 # We do not have a specific PoV, hence submit the most reliable PoV we have
                 if (to_submit_pov is None or not to_submit_pov.pov_test_results.num_success > 0) and cs.exploits:
-                    to_submit_pov = cs.most_reliable_exploit
-                    LOG.info("Submitting most reliable POV %s against team=%s cs=%s",
-                                to_submit_pov.id, team.name, cs.name)
+                    most_reliable = cs.most_reliable_exploit
+                    # Do not submit a PoV which is completely unreliable
+                    if most_reliable.reliability > 0:
+                        to_submit_pov = most_reliable
+                        LOG.info("Submitting most reliable POV %s against team=%s cs=%s",
+                                    to_submit_pov.id, team.name, cs.name)
 
                 # Submit our PoV
                 if to_submit_pov is not None:
