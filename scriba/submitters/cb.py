@@ -3,9 +3,12 @@
 
 from __future__ import absolute_import, unicode_literals
 
+import peewee
 from farnsworth.models import (ChallengeSet,
                                CSSubmissionCable,
                                ChallengeSetFielding,
+                               PatcherexJob,
+                               PatchType,
                                Team)
 
 from . import LOG as _PARENT_LOG
@@ -29,6 +32,9 @@ LOCAL_CB_SCORE_THRESHOLD = 0.3
 # Expected number of rounds any CS will be available in future.
 MIN_CS_LIFE_ROUNDS = 10
 
+ORIG_PATCH_ORDER = PatcherexJob.PATCH_TYPES.keys()
+NEXT_PATCH_ORDER = list(ORIG_PATCH_ORDER)
+ORDERS = { }
 
 class CBSubmitter(object):
 
@@ -113,14 +119,42 @@ class CBSubmitter(object):
         """
         cbns_to_submit = CBSubmitter.patch_decision(target_cs)
         if cbns_to_submit is not None:
-            for cbn in cbns_to_submit:
-                CSSubmissionCable.get_or_create(cs=target_cs, cbns=cbn, ids=cbn.ids_rule)
+            try:
+                CSSubmissionCable.create(cs=target_cs, cbns=cbns_to_submit, ids=cbns_to_submit[0].ids_rule)
+            except peewee.IntegrityError:
+                pass
         else:
             LOG.info("Leaving old CBNs in place for %s", target_cs.name)
 
+    @staticmethod
+    def rotator_submission(target_cs):
+        global NEXT_PATCH_ORDER
+
+        if target_cs.name not in ORDERS or len(ORDERS[target_cs.name]) == 0:
+            ORDERS[target_cs.name] = list(NEXT_PATCH_ORDER)
+            #print target_cs.name, NEXT_PATCH_ORDER
+            NEXT_PATCH_ORDER = NEXT_PATCH_ORDER[1:] + NEXT_PATCH_ORDER[:1]
+
+        all_patches = target_cs.cbns_by_patch_type()
+        for n in ORDERS[target_cs.name]:
+            pt = PatchType.get(name=n)
+            if pt not in all_patches:
+                continue
+            ORDERS[target_cs.name].remove(n)
+            cbns = all_patches[pt]
+            try:
+                print "SUBMITTING", target_cs.name, cbns[0].name, cbns[0].patch_type.name
+                c = CSSubmissionCable.create(cs=target_cs, cbns=cbns, ids=cbns[0].ids_rule)
+                #c.cbns.extend(cbns)
+                #c.save()
+                print "...", c.id
+            except peewee.IntegrityError:
+                pass
+            break
+
     def run(self, current_round=None, random_submit=False): # pylint:disable=no-self-use,unused-argument
-        if (current_round % 2) == 1:
-            # Submit only in even round.
-            # As ambassador will take care of actually submitting the binary.
-            for cs in ChallengeSet.fielded_in_round():
-                CBSubmitter.process_patch_submission(cs)
+        # Submit only in even round.
+        # As ambassador will take care of actually submitting the binary.
+        for cs in ChallengeSet.fielded_in_round():
+            #CBSubmitter.process_patch_submission(cs)
+            CBSubmitter.rotator_submission(cs)
