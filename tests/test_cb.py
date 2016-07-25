@@ -10,9 +10,11 @@ from farnsworth.models import Round
 from farnsworth.models import ChallengeSet as CS
 from farnsworth.models import ChallengeBinaryNode as CBN
 from farnsworth.models import ChallengeSetFielding as CSF
+from farnsworth.models import CSSubmissionCable as CSSC
 from farnsworth.models import PollFeedback as PF
-from farnsworth.models import PatchType as PT
 from farnsworth.models import PatchScore as PS
+from farnsworth.models import PatchType as PT
+from farnsworth.models import IDSRule
 
 from . import setup_each, teardown_each
 import scriba.submitters.cb
@@ -88,3 +90,37 @@ class TestCBSubmitter():
 
         # Make sure we revert
         assert_equals(scriba.submitters.cb.CBSubmitter.patch_decision(cs), [cbn_orig])
+
+    def test_variable_submitter(self):
+        t = Team.create(name=Team.OUR_NAME)
+        r0 = Round.create(num=0)
+
+        # set up several CSes
+        cses = [ CS.create(name='CS_%s' % i) for i in range(10) ]
+
+        # Set up the patches
+        for cs in cses:
+            for pt in PT.select():
+                ids = IDSRule.create(cs=cs, rules="HAHAHA")
+                cbn = CBN.create(cs=cs, name=cs.name+"_"+pt.name, blob="XXXX", patch_type=pt, ids_rule=ids)
+
+        patch_names = scriba.submitters.cb.ORIG_PATCH_ORDER
+
+        try:
+            cur_cssc_id = CSSC.select().order_by(CSSC.id.desc()).get().id
+        except CSSC.DoesNotExist:
+            cur_cssc_id = 0
+
+        # run the scheduler
+        for _ in scriba.submitters.cb.ORIG_PATCH_ORDER:
+            for c in cses:
+                scriba.submitters.cb.CBSubmitter.rotator_submission(c)
+
+        # make sure they got rotated correctly
+        for n,cs in enumerate(cses):
+            cables = list(CSSC.select().where(
+                (CSSC.cs == cs) &
+                (CSSC.id > cur_cssc_id)
+            ).order_by(CSSC.id.asc()))
+            assert len(cables) > 0
+            assert all(c.cbns[0].patch_type.name == pn for c,pn in zip(cables, (patch_names*10)[n:]))
