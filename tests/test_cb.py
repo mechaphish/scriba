@@ -36,7 +36,7 @@ class TestCBSubmitter():
         # Set up a CBN for it, with some feedback
         cbn_orig = CBN.create(cs=cs, name="unpatched", blob="XXXX")
         pf_orig = PF.create(
-            cs=cs, round_id=r0.id,
+            cs=cs, round=r0,
             success=1.0, timeout=0, connect=0, function=0,
             time_overhead=0.0, memory_overhead=0.0
         )
@@ -74,7 +74,7 @@ class TestCBSubmitter():
         # Field the patch - we're down the first round
         r1 = Round.create(num=1)
         pf1 = PF.create(
-            cs=cs, round_id=r1.id,
+            cs=cs, round=r1,
             success=0.0, timeout=0, connect=0, function=0,
             time_overhead=0.0, memory_overhead=0.0
         )
@@ -82,7 +82,7 @@ class TestCBSubmitter():
 
         r2 = Round.create(num=2)
         pf2 = PF.create(
-            cs=cs, round_id=r1.id,
+            cs=cs, round=r1,
             success=1.0, timeout=0, connect=0, function=0,
             time_overhead=1.3, memory_overhead=1.3
         )
@@ -99,7 +99,7 @@ class TestCBSubmitter():
         # Set up a CBN for it, with some feedback
         cbn_orig = CBN.create(cs=cs, name="unpatched", blob="XXXX")
         pf_orig = PF.create(
-            cs=cs, round_id=r0.id,
+            cs=cs, round=r0,
             success=1.0, timeout=0, connect=0, function=0,
             time_overhead=0.0, memory_overhead=0.0
         )
@@ -186,7 +186,7 @@ class TestCBSubmitter():
 
         # Field the default CBN
         pf_orig = PF.create(
-            cs=cs, round_id=r0.id,
+            cs=cs, round=r0,
             success=1.0, timeout=0, connect=0, function=0,
             time_overhead=0.0, memory_overhead=0.0
         )
@@ -252,7 +252,7 @@ class TestCBSubmitter():
         # now we get a real result, telling us that it's fucked
         r2 = Round.create(num=2)
         pf_3 = PF.create(
-            cs=cs, round_id=r2.id,
+            cs=cs, round=r2,
             success=1.0, timeout=0, connect=0, function=0,
             time_overhead=0.3, memory_overhead=0.3
         )
