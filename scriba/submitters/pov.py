@@ -46,8 +46,12 @@ class POVSubmitter(object):
                     # No, latest CS fielding, something wrong!!
                     LOG.warn("No CS fielding available for team=%s cs=%s", team.name, cs.name)
 
+                # if the best PoV we have has absolutely no successes, it may as well be nothing
+                if to_submit_pov is not None and results.num_success == 0:
+                    to_submit_pov = None
+
                 # We do not have a specific PoV, hence submit the most reliable PoV we have
-                if (to_submit_pov is None or results.num_success == 0) and cs.exploits:
+                if to_submit_pov is None and cs.exploits:
                     most_reliable = cs.most_reliable_exploit
                     # Do not submit a PoV which is completely unreliable
                     if most_reliable.reliability > 0:
