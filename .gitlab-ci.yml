@@ -2,8 +2,10 @@ tests:
   services:
     - postgres:9.5
   script:
-    - pip install --process-dependency-links -U -e .
-    - ./setupdb.sh .env.test
+    - git clone git@git.seclab.cs.ucsb.edu:cgc/farnsworth
+    - pip install --process-dependency-links -U ./farnsworth
+    - pip install -U -e .
+    - farnsworth/setupdb.sh .env.test
     - nosetests tests
   tags: ["angr"]
 
@@ -17,8 +19,8 @@ docs:
   tags: ["cgc-linter"]
 
 build_images:
-    only: ["master"]
-    stage: deploy
-    script:
-    - cgc-build scriba
-    tags: ["docker-builder"]
+  only: ["master"]
+  stage: deploy
+  script:
+  - cgc-build scriba
+  tags: ["docker-builder"]
