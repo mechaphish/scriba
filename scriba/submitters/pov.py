@@ -24,6 +24,7 @@ class POVSubmitter(object):
                 target_cs_fielding = ChallengeSetFielding.latest(cs, team)
                 target_ids_fielding = IDSRuleFielding.latest(cs, team)
                 to_submit_pov = None
+                results = None
 
                 if target_cs_fielding is not None:
                     results = PovTestResult.best(target_cs_fielding, target_ids_fielding)
@@ -46,7 +47,7 @@ class POVSubmitter(object):
                     LOG.warn("No CS fielding available for team=%s cs=%s", team.name, cs.name)
 
                 # We do not have a specific PoV, hence submit the most reliable PoV we have
-                if (to_submit_pov is None or not to_submit_pov.pov_test_results.num_success > 0) and cs.exploits:
+                if (to_submit_pov is None or results.num_success == 0) and cs.exploits:
                     most_reliable = cs.most_reliable_exploit
                     # Do not submit a PoV which is completely unreliable
                     if most_reliable.reliability > 0:
