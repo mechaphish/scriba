@@ -10,6 +10,7 @@ from farnsworth.models import (ChallengeSet,
                                ExploitSubmissionCable,
                                PatcherexJob,
                                PatchType,
+                               Round,
                                Team)
 
 from . import LOG as _PARENT_LOG
@@ -161,10 +162,34 @@ class CBSubmitter(object):
         else:
             return None
 
-        fielding = ChallengeSetFielding.latest(target_cs, Team.get_our())
-        current_cbns = list(fielding.cbns)
-        if not CBSubmitter.same_cbns(new_cbns, current_cbns):
-            return new_cbns
+        try:
+            # Check if we have submitted in this round?
+            fielding = ChallengeSetFielding.get((ChallengeSetFielding.cs == target_cs)
+                                                & (ChallengeSetFielding.team == Team.get_our())
+                                                & (ChallengeSetFielding.submission_round ==
+                                                   Round.current_round()))
+            if CBSubmitter.same_cbns(new_cbns, list(fielding.cbns)):
+                LOG.debug("Nothing to do, we submitted the best we have this round")
+                return
+            else:
+                LOG.debug("We submitted already this round, but we have something better now")
+                return new_cbns
+        except ChallengeSetFielding.DoesNotExist:
+            # We did not submit this round, let's check what we have fielded
+            fielding = ChallengeSetFielding.latest(target_cs, Team.get_our())
+
+            if fielding is not None:
+                # Fielding should always be not None, or we are in a
+                # race condition and do not want to do anything right
+                # now, we will be run again, at which point fieldings
+                # should be set.
+                if CBSubmitter.same_cbns(new_cbns, list(fielding.cbns)):
+                    LOG.debug("Nothing to do, we submitted the best we have in the past")
+                    return
+                else:
+                    LOG.info("We have not submitted this round, but we should")
+                    return new_cbns
+
 
     @staticmethod
     def process_patch_submission(target_cs):
