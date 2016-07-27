@@ -154,7 +154,7 @@ class CBSubmitter(object):
         for patch_type in sorted(all_patches.keys(), key=lambda pt: pt.exploitability):
             cbn = all_patches[patch_type][0]
             estimation = cbn.estimated_feedback
-            if best_patch_type is None and estimation is not None and not estimation.has_failed_polls:
+            if best_patch_type is None: # and estimation is not None and not estimation.has_failed_polls:
                 best_patch_type = patch_type
             if cbn.min_cb_score is not None and cbn.min_cb_score < MIN_CB_SCORE:
                 pull_back = True
