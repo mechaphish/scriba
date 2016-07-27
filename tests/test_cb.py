@@ -247,7 +247,7 @@ class TestCBSubmitter():
 
         # Make sure we choose the more secure one
         chosen_1 = scriba.submitters.cb.CBSubmitter.patch_decision_simple(cs)
-        assert_equals(chosen_1, [cbn_p3])
+        assert_items_equal(chosen_1, [cbn_p3])
 
         # now we get a real result, telling us that it's fucked
         r2 = Round.create(num=2)
@@ -256,11 +256,11 @@ class TestCBSubmitter():
             success=1.0, timeout=0, connect=0, function=0,
             time_overhead=0.3, memory_overhead=0.3
         )
-        CSF.create(cs=cs, cbns=[cbn_p3], team=t, available_round=r2, poll_feedback=pf_3)
+        CSF.create(cs=cs, cbns=chosen_1, team=t, available_round=r2, poll_feedback=pf_3)
 
         # Make sure we properly roll back
         assert_items_equal(scriba.submitters.cb.CBSubmitter.patch_decision_simple(cs), cs.cbns_original)
-        CSF.create(cs=cs, cbns=cs.cbns_original, team=t, submitted_round=r2)
+        CSF.create(cs=cs, cbns=cs.cbns_original, team=t, submission_round=r2)
 
         # now we get the result for the third, awesome, patch
         PS.create(
