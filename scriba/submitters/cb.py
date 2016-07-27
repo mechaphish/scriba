@@ -3,12 +3,16 @@
 
 from __future__ import absolute_import, unicode_literals
 
+import datetime
+
 import peewee
 from farnsworth.models import (ChallengeSet,
                                CSSubmissionCable,
                                ChallengeSetFielding,
+                               ExploitSubmissionCable,
                                PatcherexJob,
                                PatchType,
+                               Round,
                                Team)
 
 from . import LOG as _PARENT_LOG
@@ -23,7 +27,7 @@ MIN_ROUNDS_ONLINE = 4
 
 # Minimum expected score of a CB, if score falls below this in a round,
 # we blacklist the patch type
-MIN_CB_SCORE = 0.5
+MIN_CB_SCORE = 0.9
 
 # EV threshold, threshold if a local ev is less than this threshold.
 # It will be blacklisted.
@@ -52,7 +56,10 @@ class CBSubmitter(object):
             return actual_min < MIN_CB_SCORE
 
         estimation = cbs[0].estimated_feedback
-        if estimation.has_failed_polls:
+        if estimation is None:
+            LOG.debug("... no feedback yet")
+            return True
+        elif estimation.has_failed_polls:
             LOG.debug("... has failed polls in estimation")
             return True
         elif estimation.cb_score < LOCAL_CB_SCORE_THRESHOLD:
@@ -63,8 +70,8 @@ class CBSubmitter(object):
 
     @staticmethod
     def same_cbns(a_list, b_list):
-        b_ids = [b.id for b in b_list]
-        return len(a_list) == len(b_list) and all(a.id in b_ids for a in a_list)
+        b_ids = [b.sha256 for b in b_list]
+        return len(a_list) == len(b_list) and all(a.sha256 in b_ids for a in a_list)
 
     @staticmethod
     def cb_score(cb):
@@ -111,24 +118,104 @@ class CBSubmitter(object):
         if not CBSubmitter.same_cbns(new_cbns, current_cbns):
             return new_cbns
 
+    #
+    # Simple submission strategy
+    #
+
+    @staticmethod
+    def blacklisted_simple(cbs):
+        LOG.debug("Checking CBS...")
+        actual_min = cbs[0].min_cb_score
+        if actual_min is not None:
+            LOG.debug("... have an actual poll")
+            return actual_min < MIN_CB_SCORE
+
+        estimation = cbs[0].estimated_feedback
+        if estimation is None:
+            LOG.debug("... no feedback yet")
+            return True
+        elif estimation.has_failed_polls:
+            LOG.debug("... has failed polls in estimation")
+            return True
+
+        return False
+
+    @staticmethod
+    def patch_decision_simple(target_cs):
+        """
+        Determines the CBNs to submit. Returns None if no submission should be made.
+        We only submit 1 patch type per CS.
+        """
+        round_ = Round.current_round()
+        all_patches = target_cs.cbns_by_patch_type()
+
+        best_patch_type = None
+        pull_back = False
+        for patch_type in sorted(all_patches.keys(), key=lambda pt: pt.exploitability):
+            cbn = all_patches[patch_type][0]
+            estimation = cbn.estimated_feedback
+            if best_patch_type is None and estimation is not None and not estimation.has_failed_polls:
+                best_patch_type = patch_type
+            if cbn.min_cb_score is not None and cbn.min_cb_score < MIN_CB_SCORE:
+                pull_back = True
+
+        if pull_back:
+            new_cbns = target_cs.cbns_original
+        elif best_patch_type is not None:
+            new_cbns = all_patches[best_patch_type]
+        else:
+            return
+
+        # Check if we have submitted in this round?
+        fielding = ChallengeSetFielding.submissions(cs=target_cs,
+                                                    team=Team.get_our(),
+                                                    round=round_)
+        if fielding is not None:
+            if CBSubmitter.same_cbns(new_cbns, list(fielding.cbns)):
+                LOG.debug("Nothing to do, we submitted the best we have this round")
+                return
+            else:
+                LOG.debug("We submitted already this round, but we have something better now")
+                return new_cbns
+        else:
+            # We did not submit this round, let's check what we have fielded
+            fielding = ChallengeSetFielding.latest(cs=target_cs,
+                                                   team=Team.get_our(),
+                                                   round=round_)
+            if fielding is not None:
+                # Fielding should always be not None, or we are in a
+                # race condition and do not want to do anything right
+                # now, we will be run again, at which point fieldings
+                # should be set.
+                if CBSubmitter.same_cbns(new_cbns, list(fielding.cbns)):
+                    LOG.debug("Nothing to do, we submitted the best we have in the past")
+                    return
+                else:
+                    LOG.info("We have not submitted this round, but we should")
+                    return new_cbns
+
+
     @staticmethod
     def process_patch_submission(target_cs):
         """
         Process a patch submission request for the provided ChallengeSet
         :param target_cs: ChallengeSet for which the request needs to be processed.
         """
-        cbns_to_submit = CBSubmitter.patch_decision(target_cs)
+        round_ = Round.current_round()
+        cbns_to_submit = CBSubmitter.patch_decision_simple(target_cs)
         if cbns_to_submit is not None:
-            try:
-                CSSubmissionCable.create(cs=target_cs, cbns=cbns_to_submit, ids=cbns_to_submit[0].ids_rule)
-            except peewee.IntegrityError:
-                pass
+            CSSubmissionCable.get_or_create(cs=target_cs,
+                                            cbns=cbns_to_submit,
+                                            ids=cbns_to_submit[0].ids_rule,
+                                            round=round_)
         else:
             LOG.info("Leaving old CBNs in place for %s", target_cs.name)
 
     @staticmethod
     def rotator_submission(target_cs):
         global NEXT_PATCH_ORDER
+
+        round_ = Round.current_round()
 
         if target_cs.name not in ORDERS or len(ORDERS[target_cs.name]) == 0:
             ORDERS[target_cs.name] = list(NEXT_PATCH_ORDER)
@@ -142,15 +229,37 @@ class CBSubmitter(object):
                 continue
             ORDERS[target_cs.name].remove(n)
             cbns = all_patches[pt]
-            try:
-                print "SUBMITTING", target_cs.name, cbns[0].name, cbns[0].patch_type.name
-                c = CSSubmissionCable.create(cs=target_cs, cbns=cbns, ids=cbns[0].ids_rule)
-                #c.cbns.extend(cbns)
-                #c.save()
-                print "...", c.id
-            except peewee.IntegrityError:
-                pass
+            print "SUBMITTING", target_cs.name, cbns[0].name, cbns[0].patch_type.name
+            c, _ = CSSubmissionCable.get_or_create(cs=target_cs,
+                                                   cbns=cbns,
+                                                   ids=cbns[0].ids_rule,
+                                                   round=round_)
+            print "...", c.id
             break
+
+    @staticmethod
+    def should_submit(target_cs):
+        # FIXME: this should be generalized per challenge set introduction
+        # don't submit on the first round
+        if Round.current_round().num == 0:
+            return False
+
+        # don't submit if we haven't submitted an exploit at least 5 minutes ago
+        old = datetime.datetime.now() - datetime.timedelta(minutes=5)
+        if not ExploitSubmissionCable.select().where(
+                (ExploitSubmissionCable.cs == target_cs) &
+                (ExploitSubmissionCable.processed_at >> None) &
+                (ExploitSubmissionCable.processed_at <= old)).exists():
+            return False
+
+        # don't submit if we haven't found an crash at least 8 minutes ago
+        old = datetime.datetime.now() - datetime.timedelta(minutes=8)
+        if not Crash.select().where(
+                (Crash.cs == target_cs) &
+                (Crash.created_at <= old)).exists():
+            return False
+
+        return True
 
     def run(self, current_round=None, random_submit=False): # pylint:disable=no-self-use,unused-argument
         if current_round == 0:
@@ -158,5 +267,6 @@ class CBSubmitter(object):
 
         # As ambassador will take care of actually submitting the binary.
         for cs in ChallengeSet.fielded_in_round():
-            #CBSubmitter.process_patch_submission(cs)
-            CBSubmitter.rotator_submission(cs)
+            if not self.should_submit(cs):
+                continue
+            CBSubmitter.process_patch_submission(cs)
