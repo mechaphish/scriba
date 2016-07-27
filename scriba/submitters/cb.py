@@ -130,13 +130,13 @@ class CBSubmitter(object):
             LOG.debug("... have an actual poll")
             return actual_min < MIN_CB_SCORE
 
-        estimation = cbs[0].estimated_feedback
-        if estimation is None:
-            LOG.debug("... no feedback yet")
-            return True
-        elif estimation.has_failed_polls:
-            LOG.debug("... has failed polls in estimation")
-            return True
+        #estimation = cbs[0].estimated_feedback
+        #if estimation is None:
+        #   LOG.debug("... no feedback yet")
+        #   return True
+        #elif estimation.has_failed_polls:
+        #   LOG.debug("... has failed polls in estimation")
+        #   return True
 
         return False
 
