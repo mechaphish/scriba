@@ -3,6 +3,8 @@
 
 from __future__ import absolute_import, unicode_literals
 
+import datetime
+
 import peewee
 from farnsworth.models import (ChallengeSet,
                                CSSubmissionCable,
@@ -142,6 +144,7 @@ class CBSubmitter(object):
     def patch_decision_simple(target_cs):
         """
         Determines the CBNs to submit. Returns None if no submission should be made.
+        We only submit 1 patch type per CS.
         """
         round_ = Round.current_round()
         all_patches = target_cs.cbns_by_patch_type()
@@ -161,7 +164,7 @@ class CBSubmitter(object):
         elif best_patch_type is not None:
             new_cbns = all_patches[best_patch_type]
         else:
-            return None
+            return
 
         # Check if we have submitted in this round?
         fielding = ChallengeSetFielding.submissions(cs=target_cs,
@@ -236,26 +239,27 @@ class CBSubmitter(object):
 
     @staticmethod
     def should_submit(target_cs):
+        # FIXME: this should be generalized per challenge set introduction
         # don't submit on the first round
         if Round.current_round().num == 0:
             return False
 
         # don't submit if we haven't submitted an exploit at least 5 minutes ago
         old = datetime.datetime.now() - datetime.timedelta(minutes=5)
-        if ExploitSubmissionCable.select().where(
-            (ExploitSubmissionCable.cs == target_cs) &
-            (ExploitSubmissionCable.processed_at >> None) &
-            (ExploitSubmissionCable.processed_at <= old)
-        ).count() == 0:
+        if not ExploitSubmissionCable.select().where(
+                (ExploitSubmissionCable.cs == target_cs) &
+                (ExploitSubmissionCable.processed_at >> None) &
+                (ExploitSubmissionCable.processed_at <= old)).exists():
             return False
 
         # don't submit if we haven't found an crash at least 8 minutes ago
         old = datetime.datetime.now() - datetime.timedelta(minutes=8)
-        if Crash.select().where(
-            (Crash.cs == target_cs) &
-            (Crash.created_at <= old)
-        ).count() == 0:
+        if not Crash.select().where(
+                (Crash.cs == target_cs) &
+                (Crash.created_at <= old)).exists():
             return False
+
+        return True
 
     def run(self, current_round=None, random_submit=False): # pylint:disable=no-self-use,unused-argument
         if current_round == 0:
