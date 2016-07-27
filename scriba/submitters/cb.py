@@ -143,6 +143,7 @@ class CBSubmitter(object):
         """
         Determines the CBNs to submit. Returns None if no submission should be made.
         """
+        round_ = Round.current_round()
         all_patches = target_cs.cbns_by_patch_type()
 
         best_patch_type = None
@@ -162,22 +163,22 @@ class CBSubmitter(object):
         else:
             return None
 
-        try:
-            # Check if we have submitted in this round?
-            fielding = ChallengeSetFielding.get((ChallengeSetFielding.cs == target_cs)
-                                                & (ChallengeSetFielding.team == Team.get_our())
-                                                & (ChallengeSetFielding.submission_round ==
-                                                   Round.current_round()))
+        # Check if we have submitted in this round?
+        fielding = ChallengeSetFielding.submissions(cs=target_cs,
+                                                    team=Team.get_our(),
+                                                    round=round_)
+        if fielding is not None:
             if CBSubmitter.same_cbns(new_cbns, list(fielding.cbns)):
                 LOG.debug("Nothing to do, we submitted the best we have this round")
                 return
             else:
                 LOG.debug("We submitted already this round, but we have something better now")
                 return new_cbns
-        except ChallengeSetFielding.DoesNotExist:
+        else:
             # We did not submit this round, let's check what we have fielded
-            fielding = ChallengeSetFielding.latest(target_cs, Team.get_our())
-
+            fielding = ChallengeSetFielding.latest(cs=target_cs,
+                                                   team=Team.get_our(),
+                                                   round=round_)
             if fielding is not None:
                 # Fielding should always be not None, or we are in a
                 # race condition and do not want to do anything right
@@ -197,18 +198,21 @@ class CBSubmitter(object):
         Process a patch submission request for the provided ChallengeSet
         :param target_cs: ChallengeSet for which the request needs to be processed.
         """
+        round_ = Round.current_round()
         cbns_to_submit = CBSubmitter.patch_decision_simple(target_cs)
         if cbns_to_submit is not None:
-            try:
-                CSSubmissionCable.create(cs=target_cs, cbns=cbns_to_submit, ids=cbns_to_submit[0].ids_rule)
-            except peewee.IntegrityError:
-                pass
+            CSSubmissionCable.get_or_create(cs=target_cs,
+                                            cbns=cbns_to_submit,
+                                            ids=cbns_to_submit[0].ids_rule,
+                                            round=round_)
         else:
             LOG.info("Leaving old CBNs in place for %s", target_cs.name)
 
     @staticmethod
     def rotator_submission(target_cs):
         global NEXT_PATCH_ORDER
+
+        round_ = Round.current_round()
 
         if target_cs.name not in ORDERS or len(ORDERS[target_cs.name]) == 0:
             ORDERS[target_cs.name] = list(NEXT_PATCH_ORDER)
@@ -222,14 +226,12 @@ class CBSubmitter(object):
                 continue
             ORDERS[target_cs.name].remove(n)
             cbns = all_patches[pt]
-            try:
-                print "SUBMITTING", target_cs.name, cbns[0].name, cbns[0].patch_type.name
-                c = CSSubmissionCable.create(cs=target_cs, cbns=cbns, ids=cbns[0].ids_rule)
-                #c.cbns.extend(cbns)
-                #c.save()
-                print "...", c.id
-            except peewee.IntegrityError:
-                pass
+            print "SUBMITTING", target_cs.name, cbns[0].name, cbns[0].patch_type.name
+            c, _ = CSSubmissionCable.get_or_create(cs=target_cs,
+                                                   cbns=cbns,
+                                                   ids=cbns[0].ids_rule,
+                                                   round=round_)
+            print "...", c.id
             break
 
     @staticmethod
