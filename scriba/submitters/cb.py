@@ -160,6 +160,7 @@ class CBSubmitter(object):
             return
 
         if pull_back:
+            LOG.info("Pulling back the patch!")
             new_cbns = target_cs.cbns_original
         elif len(evaluated_patches):
             LOG.info("We already have feedback for a submitted patch, so we are not submitting.")
@@ -248,20 +249,20 @@ class CBSubmitter(object):
             LOG.info("Not submitting on round 0.")
             return False
 
-        # don't submit if we haven't submitted an exploit at least 5 minutes ago
-        old = datetime.datetime.now() - datetime.timedelta(minutes=4)
+        # don't submit if we haven't submitted an exploit before this round
         if ExploitSubmissionCable.select().where(
                 (ExploitSubmissionCable.cs == target_cs) &
-                (ExploitSubmissionCable.processed_at >> None) &
-                (ExploitSubmissionCable.processed_at <= old)).exists():
+                (ExploitSubmissionCable.processed_at >> None) & (
+                    ExploitSubmissionCable.processed_at <=
+                    Round.current_round().created_at - datetime.timedelta(seconds=20)
+                )).exists():
             LOG.info("There's an exploit that's over a round old!.")
             return True
 
-        # don't submit if we haven't found an crash at least 8 minutes ago
-        old = datetime.datetime.now() - datetime.timedelta(minutes=8)
+        # don't submit if we haven't found an crash before the last round
         if Crash.select().where(
                 (Crash.cs == target_cs) &
-                (Crash.created_at <= old)).exists():
+                (Crash.created_at <= Round.prev_round().created_at)).exists():
             LOG.info("There's a crash that's over two rounds old!")
             return True
 
