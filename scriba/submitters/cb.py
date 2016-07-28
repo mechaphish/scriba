@@ -249,20 +249,20 @@ class CBSubmitter(object):
 
         # don't submit if we haven't submitted an exploit at least 5 minutes ago
         old = datetime.datetime.now() - datetime.timedelta(minutes=5)
-        if not ExploitSubmissionCable.select().where(
+        if ExploitSubmissionCable.select().where(
                 (ExploitSubmissionCable.cs == target_cs) &
                 (ExploitSubmissionCable.processed_at >> None) &
                 (ExploitSubmissionCable.processed_at <= old)).exists():
-            return False
+            return True
 
         # don't submit if we haven't found an crash at least 8 minutes ago
         old = datetime.datetime.now() - datetime.timedelta(minutes=8)
-        if not Crash.select().where(
+        if Crash.select().where(
                 (Crash.cs == target_cs) &
                 (Crash.created_at <= old)).exists():
-            return False
+            return True
 
-        return True
+        return False
 
     def run(self, current_round=None, random_submit=False): # pylint:disable=no-self-use,unused-argument
         if current_round == 0:
