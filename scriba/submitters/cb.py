@@ -207,9 +207,13 @@ class CBSubmitter(object):
         round_ = Round.current_round()
         cbns_to_submit = CBSubmitter.patch_decision_simple(target_cs)
         if cbns_to_submit is not None:
+            if cbns_to_submit[0].ids_rule is None:
+                ids = IDSRule.create(cs=target_cs, rules='')
+            else:
+                ids = cbns_to_submit[0].ids_rule
             CSSubmissionCable.get_or_create(cs=target_cs,
                                             cbns=cbns_to_submit,
-                                            ids=cbns_to_submit[0].ids_rule,
+                                            ids=ids,
                                             round=round_)
         else:
             LOG.info("Leaving old CBNs in place for %s", target_cs.name)
