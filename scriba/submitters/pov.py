@@ -39,6 +39,8 @@ class POVSubmitter(object):
                         # Good, we have a PovTestResult to submit.
                         # FIXME: Should we take the most reliable against this CS and IDS?
                         to_submit_pov = results.exploit
+                        LOG.info("Submitting a tested PoV %s against team=%s cs=%s",
+                                 to_submit_pov.id, team.name, cs.name)
 
                 else:
                     # No, latest CS fielding, something wrong!!
