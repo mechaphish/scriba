@@ -39,8 +39,6 @@ class POVSubmitter(object):
                         # Good, we have a PovTestResult to submit.
                         # FIXME: Should we take the most reliable against this CS and IDS?
                         to_submit_pov = results.exploit
-                        LOG.info("Submitting a tested PoV %s against team=%s cs=%s",
-                                 to_submit_pov.id, team.name, cs.name)
 
                 else:
                     # No, latest CS fielding, something wrong!!
@@ -61,12 +59,12 @@ class POVSubmitter(object):
 
                 # Submit our PoV
                 if to_submit_pov is not None:
-                    # Do not resubmit an exploit for a given team if it is currently active
-                    if ExploitSubmissionCable.most_recent_for_team(team, cs) != to_submit_pov:
-                        ExploitSubmissionCable.create(team=team,
-                                                      cs=cs,
-                                                      exploit=to_submit_pov,
-                                                      throws=throws)
-                        LOG.debug("POV %s marked for submission", to_submit_pov.id)
+                    LOG.info("Submitting PoV %s against team=%s cs=%s",
+                             to_submit_pov.id, team.name, cs.name)
+                    ExploitSubmissionCable.create(team=team,
+                                                  cs=cs,
+                                                  exploit=to_submit_pov,
+                                                  throws=throws)
+                    LOG.debug("POV %s marked for submission", to_submit_pov.id)
                 else:
                     LOG.warn("No POV to submit for team=%s cs=%s", team.name, cs.name)
