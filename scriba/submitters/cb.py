@@ -149,22 +149,19 @@ class CBSubmitter(object):
         round_ = Round.current_round()
         all_patches = target_cs.cbns_by_patch_type()
 
-        best_patch_type = None
-        pull_back = False
-        for patch_type in sorted(all_patches.keys(), key=lambda pt: pt.exploitability):
-            cbn = all_patches[patch_type][0]
-            estimation = cbn.estimated_feedback
-            if best_patch_type is None: # and estimation is not None and not estimation.has_failed_polls:
-                best_patch_type = patch_type
-            if cbn.min_cb_score is not None and cbn.min_cb_score < MIN_CB_SCORE:
-                pull_back = True
+        if len(all_patches):
+            best_patch_type = sorted(all_patches.keys(), key=lambda pt: pt.exploitability)[0]
+            pull_back = any(
+                cbns[0].min_cb_score is not None and cbns[0].min_cb_score < MIN_CB_SCORE
+                for cbns in all_patches.values()
+            )
+        else:
+            return
 
         if pull_back:
             new_cbns = target_cs.cbns_original
-        elif best_patch_type is not None:
-            new_cbns = all_patches[best_patch_type]
         else:
-            return
+            new_cbns = all_patches[best_patch_type]
 
         # Check if we have submitted in this round?
         fielding = ChallengeSetFielding.submissions(cs=target_cs,
@@ -172,10 +169,10 @@ class CBSubmitter(object):
                                                     round=round_)
         if fielding is not None:
             if CBSubmitter.same_cbns(new_cbns, list(fielding.cbns)):
-                LOG.debug("Nothing to do, we submitted the best we have this round")
+                LOG.info("Nothing to do, we submitted the best we have this round")
                 return
             else:
-                LOG.debug("We submitted already this round, but we have something better now")
+                LOG.info("We submitted already this round, but we have something better now")
                 return new_cbns
         else:
             # We did not submit this round, let's check what we have fielded
@@ -188,11 +185,13 @@ class CBSubmitter(object):
                 # now, we will be run again, at which point fieldings
                 # should be set.
                 if CBSubmitter.same_cbns(new_cbns, list(fielding.cbns)):
-                    LOG.debug("Nothing to do, we submitted the best we have in the past")
+                    LOG.info("Nothing to do, we submitted the best we have in the past")
                     return
                 else:
                     LOG.info("We have not submitted this round, but we should")
                     return new_cbns
+            else:
+                    LOG.warning("Hit the race condition for latest fielding being None.")
 
 
     @staticmethod
