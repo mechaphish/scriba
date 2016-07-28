@@ -148,6 +148,7 @@ class CBSubmitter(object):
         """
         round_ = Round.current_round()
         all_patches = target_cs.cbns_by_patch_type()
+        evaluated_patches = { k:v for k,v in all_patches.items() if len(v[0].poll_feedbacks) }
 
         if len(all_patches):
             best_patch_type = sorted(all_patches.keys(), key=lambda pt: pt.exploitability)[0]
@@ -160,6 +161,9 @@ class CBSubmitter(object):
 
         if pull_back:
             new_cbns = target_cs.cbns_original
+        elif len(evaluated_patches):
+            LOG.info("We already have feedback for a submitted patch, so we are not submitting.")
+            return
         else:
             new_cbns = all_patches[best_patch_type]
 
