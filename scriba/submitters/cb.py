@@ -262,9 +262,10 @@ class CBSubmitter(object):
             return True
 
         # don't submit if we haven't found an crash before the last round
-        if Crash.select().where(
+        prev_round = Round.prev_round()
+        if prev_round is not None and Crash.select().where(
                 (Crash.cs == target_cs) &
-                (Crash.created_at <= Round.prev_round().created_at)).exists():
+                (Crash.created_at <= prev_round.created_at)).exists():
             LOG.info("There's a crash that's over two rounds old!")
             return True
 
