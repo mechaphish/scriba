@@ -245,14 +245,16 @@ class CBSubmitter(object):
         # FIXME: this should be generalized per challenge set introduction
         # don't submit on the first round
         if Round.current_round().num == 0:
+            LOG.info("Not submitting on round 0.")
             return False
 
         # don't submit if we haven't submitted an exploit at least 5 minutes ago
-        old = datetime.datetime.now() - datetime.timedelta(minutes=5)
+        old = datetime.datetime.now() - datetime.timedelta(minutes=4)
         if ExploitSubmissionCable.select().where(
                 (ExploitSubmissionCable.cs == target_cs) &
                 (ExploitSubmissionCable.processed_at >> None) &
                 (ExploitSubmissionCable.processed_at <= old)).exists():
+            LOG.info("There's an exploit that's over a round old!.")
             return True
 
         # don't submit if we haven't found an crash at least 8 minutes ago
@@ -260,8 +262,10 @@ class CBSubmitter(object):
         if Crash.select().where(
                 (Crash.cs == target_cs) &
                 (Crash.created_at <= old)).exists():
+            LOG.info("There's a crash that's over two rounds old!")
             return True
 
+        LOG.info("Patch conditions not met!")
         return False
 
     def run(self, current_round=None, random_submit=False): # pylint:disable=no-self-use,unused-argument
