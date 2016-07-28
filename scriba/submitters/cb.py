@@ -3,12 +3,11 @@
 
 from __future__ import absolute_import, unicode_literals
 
-import datetime
-
 from farnsworth.models import (ChallengeSet,
                                CSSubmissionCable,
                                ChallengeSetFielding,
                                Crash,
+                               Exploit,
                                ExploitSubmissionCable,
                                PatcherexJob,
                                PatchType,
@@ -250,12 +249,11 @@ class CBSubmitter(object):
             return False
 
         # don't submit if we haven't submitted an exploit before this round
-        if ExploitSubmissionCable.select().where(
-                (ExploitSubmissionCable.cs == target_cs) &
-                (ExploitSubmissionCable.processed_at >> None) & (
-                    ExploitSubmissionCable.processed_at <=
-                    Round.current_round().created_at - datetime.timedelta(seconds=20)
-                )).exists():
+        if ExploitSubmissionCable.select().join(Exploit).where(
+            (ExploitSubmissionCable.cs == target_cs) &
+            (ExploitSubmissionCable.processed_at != None) &
+            (ExploitSubmissionCable.processed_at <= Round.current_round().created_at) &
+            (Exploit.method != "backdoor")).exists():
             LOG.info("There's an exploit that's over a round old!.")
             return True
 
