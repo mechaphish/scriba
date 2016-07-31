@@ -146,7 +146,7 @@ class CBSubmitter(object):
         Determines the CBNs to submit. Returns None if no submission should be made.
         We only submit 1 patch type per CS.
         """
-        LOG.info("CB SUBMISSION START: %s", target_cs.name)
+        LOG.info("CB SUBMISSION START: %s (round %d)", target_cs.name, round_.num)
 
         # make sure that this binary is not new this round
         if not (
@@ -166,6 +166,14 @@ class CBSubmitter(object):
         if current_fielding is None:
             LOG.warning("%s - hit the race condition for latest fielding being None", target_cs.name)
             return
+
+        LOG.info(
+            "%s - current patch type: %s", target_cs.name, (
+                current_fielding.cbns[0].patch_type.name
+                if current_fielding.cbns[0].patch_type is not None else
+                "None"
+            )
+        )
 
         # if we just submitted, wait a round before making any decisions
         if current_fielding.poll_feedback is not None and (
@@ -231,7 +239,7 @@ class CBSubmitter(object):
                 (ExploitSubmissionCable.processed_at < round_.created_at) &
                 (Exploit.method != "backdoor")
         ).exists():
-            LOG.info("%s - not submitting because we first found an exploit last round")
+            LOG.info("%s - not submitting because we first found an exploit last round", target_cs.name)
             new_cbns = list(current_fielding.cbns)
 
         if CBSubmitter.same_cbns(new_cbns, prior_submission):
