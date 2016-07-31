@@ -181,10 +181,19 @@ class CBSubmitter(object):
             return
 
         best_patch_type = sorted(all_patches.keys(), key=lambda pt: pt.exploitability)[0]
+        has_feedback = { k:v for k,v in all_patches.iteritems() if len(v[0].poll_feedbacks) > 0 }
         pull_back = any(
             cbns[0].min_cb_score is not None and cbns[0].min_cb_score < MIN_CB_SCORE
             for cbns in all_patches.values()
         )
+
+        for k,v in has_feedback.items():
+            LOG.info(
+                "%s - minimum score of patch %s is %s",
+                target_cs.name,
+                k.name,
+                v[0].min_cb_score
+            )
 
         if pull_back:
             LOG.info("%s - pulling back the patch :-(", target_cs.name)
