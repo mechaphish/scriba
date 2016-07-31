@@ -11,6 +11,7 @@ from farnsworth.models import (ChallengeSet,
                                ExploitSubmissionCable,
                                PatcherexJob,
                                PatchType,
+                               IDSRule,
                                Round,
                                Team)
 
@@ -140,63 +141,97 @@ class CBSubmitter(object):
         return False
 
     @staticmethod
-    def patch_decision_simple(target_cs):
+    def patch_decision_simple(target_cs, round_):
         """
         Determines the CBNs to submit. Returns None if no submission should be made.
         We only submit 1 patch type per CS.
         """
-        round_ = Round.current_round()
-        all_patches = target_cs.cbns_by_patch_type()
-        evaluated_patches = { k:v for k,v in all_patches.items() if len(v[0].poll_feedbacks) }
+        LOG.info("CB SUBMISSION START: %s", target_cs.name)
 
-        if len(all_patches):
-            best_patch_type = sorted(all_patches.keys(), key=lambda pt: pt.exploitability)[0]
-            pull_back = any(
-                cbns[0].min_cb_score is not None and cbns[0].min_cb_score < MIN_CB_SCORE
-                for cbns in all_patches.values()
-            )
-        else:
+        # make sure that this binary is not new this round
+        if not (
+            target_cs.id in [ cs.id for cs in ChallengeSet.fielded_in_round(round_) ] and
+            Round.prev_round() is not None and
+            target_cs.id in [ cs.id for cs in ChallengeSet.fielded_in_round(Round.prev_round()) ]
+        ):
+            LOG.info("%s - not patching in the first round", target_cs.name)
             return
+
+        current_fielding = ChallengeSetFielding.latest(cs=target_cs, team=Team.get_our(), round=round_)
+
+        # Fielding should always be not None, or we are in a
+        # race condition and do not want to do anything right
+        # now, we will be run again, at which point fieldings
+        # should be set.
+        if current_fielding is None:
+            LOG.warning("%s - hit the race condition for latest fielding being None", target_cs.name)
+            return
+
+        # if we just submitted, wait a round before making any decisions
+        if current_fielding.poll_feedback is not None and (
+            current_fielding.poll_feedback.timeout + current_fielding.poll_feedback.success +
+            current_fielding.poll_feedback.function + current_fielding.poll_feedback.connect == 0
+        ):
+            LOG.warning("%s - skipping 'downed' round", target_cs.name)
+            return
+
+        # if we don't have any patches ready, let's wait
+        all_patches = target_cs.cbns_by_patch_type()
+        if len(all_patches) == 0:
+            return
+
+        best_patch_type = sorted(all_patches.keys(), key=lambda pt: pt.exploitability)[0]
+        pull_back = any(
+            cbns[0].min_cb_score is not None and cbns[0].min_cb_score < MIN_CB_SCORE
+            for cbns in all_patches.values()
+        )
 
         if pull_back:
-            LOG.info("Pulling back the patch!")
+            LOG.info("%s - pulling back the patch :-(", target_cs.name)
             new_cbns = target_cs.cbns_original
-        elif len(evaluated_patches):
-            LOG.info("We already have feedback for a submitted patch, so we are not submitting.")
-            return
         else:
+            # if we've already patched, and we're not pulling back, forget about it
+            if not CBSubmitter.same_cbns(current_fielding.cbns, target_cs.cbns_original):
+                LOG.info("%s - already patched -- aborting!", target_cs.name)
+                return
+
+            LOG.info("%s - chose %s patch type!", target_cs.name, best_patch_type.name)
             new_cbns = all_patches[best_patch_type]
 
         # Check if we have submitted in this round?
-        fielding = ChallengeSetFielding.submissions(cs=target_cs,
-                                                    team=Team.get_our(),
-                                                    round=round_)
-        if fielding is not None:
-            if CBSubmitter.same_cbns(new_cbns, list(fielding.cbns)):
-                LOG.info("Nothing to do, we submitted the best we have this round")
-                return
-            else:
-                LOG.info("We submitted already this round, but we have something better now")
-                return new_cbns
-        else:
-            # We did not submit this round, let's check what we have fielded
-            fielding = ChallengeSetFielding.latest(cs=target_cs,
-                                                   team=Team.get_our(),
-                                                   round=round_)
-            if fielding is not None:
-                # Fielding should always be not None, or we are in a
-                # race condition and do not want to do anything right
-                # now, we will be run again, at which point fieldings
-                # should be set.
-                if CBSubmitter.same_cbns(new_cbns, list(fielding.cbns)):
-                    LOG.info("Nothing to do, we submitted the best we have in the past")
-                    return
-                else:
-                    LOG.info("We have not submitted this round, but we should")
-                    return new_cbns
-            else:
-                    LOG.warning("Hit the race condition for latest fielding being None.")
+        submitted_fielding = ChallengeSetFielding.submissions(
+            cs=target_cs, team=Team.get_our(), round=round_
+        )
 
+        if submitted_fielding is not None:
+            LOG.info("%s - we have an earlier submission this round...", target_cs.name)
+            prior_submission = list(submitted_fielding.cbns)
+        else:
+            LOG.info("%s - submitting for the first time this round...", target_cs.name)
+            prior_submission = list(current_fielding.cbns)
+
+        # if we submitted an exploit for the first time this round, let's not patch
+        if not pull_back and ExploitSubmissionCable.select().join(Exploit).where(
+            (ExploitSubmissionCable.cs == target_cs) &
+            (ExploitSubmissionCable.processed_at != None) &
+            (ExploitSubmissionCable.processed_at >= round_.created_at) &
+            (Exploit.method != "backdoor")
+        ).exists() and not ExploitSubmissionCable.select().join(Exploit).where(
+                (ExploitSubmissionCable.cs == target_cs) &
+                (ExploitSubmissionCable.processed_at != None) &
+                (ExploitSubmissionCable.processed_at < round_.created_at) &
+                (Exploit.method != "backdoor")
+        ).exists():
+            LOG.info("%s - not submitting because we first found an exploit last round")
+            new_cbns = list(current_fielding.cbns)
+
+        if CBSubmitter.same_cbns(new_cbns, prior_submission):
+            LOG.info("%s - nothing to do, this would be a resubmission", target_cs.name)
+            return
+        else:
+            LOG.info("%s - we have not yet submitted these CBNs this round!", target_cs.name)
+
+        return new_cbns
 
     @staticmethod
     def process_patch_submission(target_cs):
@@ -205,18 +240,15 @@ class CBSubmitter(object):
         :param target_cs: ChallengeSet for which the request needs to be processed.
         """
         round_ = Round.current_round()
-        cbns_to_submit = CBSubmitter.patch_decision_simple(target_cs)
+        cbns_to_submit = CBSubmitter.patch_decision_simple(target_cs, round_)
         if cbns_to_submit is not None:
             if cbns_to_submit[0].ids_rule is None:
                 ids = IDSRule.create(cs=target_cs, rules='')
             else:
                 ids = cbns_to_submit[0].ids_rule
-            CSSubmissionCable.get_or_create(cs=target_cs,
-                                            cbns=cbns_to_submit,
-                                            ids=ids,
-                                            round=round_)
+            CSSubmissionCable.get_or_create(cs=target_cs, cbns=cbns_to_submit, ids=ids, round=round_)
         else:
-            LOG.info("Leaving old CBNs in place for %s", target_cs.name)
+            LOG.info("%s - leaving old CBNs in place for", target_cs.name)
 
     @staticmethod
     def rotator_submission(target_cs):
@@ -278,6 +310,6 @@ class CBSubmitter(object):
 
         # As ambassador will take care of actually submitting the binary.
         for cs in ChallengeSet.fielded_in_round():
-            if not self.should_submit(cs):
-                continue
+            #if not self.should_submit(cs):
+            #   continue
             CBSubmitter.process_patch_submission(cs)
