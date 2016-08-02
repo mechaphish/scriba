@@ -9,6 +9,7 @@ from farnsworth.models.exploit_submission_cable import ExploitSubmissionCable
 from farnsworth.models.ids_rule_fielding import IDSRuleFielding
 from farnsworth.models.pov_test_result import PovTestResult
 from farnsworth.models.team import Team
+from farnsworth.models.round import Round
 
 import scriba.submitters
 
@@ -62,10 +63,20 @@ class POVSubmitter(object):
                 if to_submit_pov is not None:
                     LOG.info("Submitting PoV %s against team=%s cs=%s",
                              to_submit_pov.id, team.name, cs.name)
-                    ExploitSubmissionCable.create(team=team,
-                                                  cs=cs,
-                                                  exploit=to_submit_pov,
-                                                  throws=throws)
+
+                    round_ = Round.current_round()
+
+                    if ExploitSubmissionCable.cable_exists(team, cs, round_=round_):
+                        existing_cable = ExploitSubmissionCable.get(team=team, cs=cs, round=round_)
+                        existing_cable.exploit = to_submit_pov
+                        existing_cable.save()
+                    else:
+                        ExploitSubmissionCable.create(team=team,
+                                                      cs=cs,
+                                                      exploit=to_submit_pov,
+                                                      throws=throws,
+                                                      round=Round.current_round())
+
                     LOG.debug("POV %s marked for submission", to_submit_pov.id)
                 else:
                     LOG.warn("No POV to submit for team=%s cs=%s", team.name, cs.name)
