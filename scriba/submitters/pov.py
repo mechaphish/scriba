@@ -64,11 +64,10 @@ class POVSubmitter(object):
                     LOG.info("Submitting PoV %s against team=%s cs=%s",
                              to_submit_pov.id, team.name, cs.name)
 
-                    cable_exists = ExploitSubmissionCable.select().where(ExploitSubmissionCable.team == team,
-                                                                ExploitSubmissionCable.cs == cs,
-                                                                ExploitSubmissionCable.round == Round.current_round()).exists()
-                    if cable_exists:
-                        existing_cable = ExploitSubmissionCable.get(team=team, cs=cs, round=Round.current_round())
+                    round_ = Round.current_round()
+
+                    if ExploitSubmissionCable.cable_exists(team, cs, round_=round_):
+                        existing_cable = ExploitSubmissionCable.get(team=team, cs=cs, round=round_)
                         existing_cable.exploit = to_submit_pov
                         existing_cable.save()
                     else:
