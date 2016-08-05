@@ -208,7 +208,7 @@ class CBSubmitter(object):
             new_cbns = target_cs.cbns_original
         else:
             # if we've already patched, and we're not pulling back, forget about it
-            if not CBSubmitter.same_cbns(current_fielding.cbns, target_cs.cbns_original):
+            if best_patch_type.name != 'manual' and not CBSubmitter.same_cbns(current_fielding.cbns, target_cs.cbns_original):
                 LOG.info("%s - already patched -- aborting!", target_cs.name)
                 return
 
