@@ -322,6 +322,7 @@ class CBSubmitter(object):
         return False
 
     def run(self, current_round=None, random_submit=False): # pylint:disable=no-self-use,unused-argument
+        return
         if current_round == 0:
             return
 
