@@ -27,6 +27,7 @@ class POVSubmitter(object):
                 to_submit_pov = None
                 results = None
 
+                """
                 if target_cs_fielding is not None:
                     results = PovTestResult.best(target_cs_fielding, target_ids_fielding)
 
@@ -47,9 +48,11 @@ class POVSubmitter(object):
                     # No, latest CS fielding, something wrong!!
                     LOG.warn("No CS fielding available for team=%s cs=%s", team.name, cs.name)
 
+
                 # if the best PoV we have has absolutely no successes, it may as well be nothing
                 if to_submit_pov is not None and results.num_success == 0:
                     to_submit_pov = None
+                """
 
                 # We do not have a specific PoV, hence submit the most reliable PoV we have
                 if to_submit_pov is None and cs.exploits:
