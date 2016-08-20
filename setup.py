@@ -29,4 +29,4 @@ setup(name='scriba',
           ],
       },
       description=__description__,
-      url='https://git.seclab.cs.ucsb.edu/cgc/scriba')
+      url='https://github.com/mechaphish/scriba')
